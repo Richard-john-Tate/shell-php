@@ -112,15 +112,23 @@ class Shell
             return $completions;
         });
 
-        while (true) {
-            $input = readline('$ ');
+        $interactive = stream_isatty(STDIN);
 
-            if ($input === false) break; // EOF
+        while (true) {
+            if ($interactive) {
+                $input = readline('$ ');
+                if ($input === false) break;
+            } else {
+                fwrite(STDOUT, '$ ');
+                $input = fgets(STDIN);
+                if ($input === false) break;
+            }
+
             $input = trim($input);
 
             if ($input === '') continue;
 
-            readline_add_history($input);
+            if ($interactive) readline_add_history($input);
 
             $pipeSegments = Parser::splitPipeline($input);
 
