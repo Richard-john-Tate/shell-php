@@ -25,3 +25,22 @@ php app/main.php
 ```
 
 Requires PHP 8.5+ with the `readline` extension.
+
+## Run Tests
+
+Tests run inside Docker to ensure a consistent Unix environment:
+
+```bash
+docker build -t codecrafters-shell-php .
+docker run --rm -v "$(pwd):/app" codecrafters-shell-php php vendor/bin/phpunit
+```
+
+Run specific test suites:
+
+```bash
+# Unit tests only
+docker run --rm -v "$(pwd):/app" codecrafters-shell-php php vendor/bin/phpunit --testsuite Unit
+
+# Integration tests only
+docker run --rm -v "$(pwd):/app" codecrafters-shell-php php vendor/bin/phpunit --testsuite Integration
+```

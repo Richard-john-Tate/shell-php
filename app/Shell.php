@@ -128,7 +128,7 @@ class Shell
 
             if ($input === '') continue;
 
-            if ($interactive) readline_add_history($input);
+            readline_add_history($input);
 
             $pipeSegments = Parser::splitPipeline($input);
 

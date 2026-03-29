@@ -16,15 +16,16 @@ abstract class ShellTestCase extends TestCase
 
     protected function setUp(): void
     {
-        $desc = [
-            0 => ['pipe', 'r'],  // shell's stdin  — we write here
-            1 => ['pipe', 'w'],  // shell's stdout — we read here
-            2 => ['pipe', 'w'],  // shell's stderr — ignored / checked per-test
-        ];
-
+        // Redirect stderr to stdout so error messages are captured
+        // The "2>&1" redirection is handled by bash
+        $cmd = PHP_BINARY . ' app/main.php';
         $this->process = proc_open(
-            [PHP_BINARY, 'app/main.php'],
-            $desc,
+            "($cmd) 2>&1",
+            [
+                0 => ['pipe', 'r'],  // shell's stdin
+                1 => ['pipe', 'w'],  // shell's stdout (includes stderr)
+                2 => ['pipe', 'w'],  // shell's stderr — not used when 2>&1 is in cmd
+            ],
             $pipes,
             dirname(__DIR__, 2)   // working dir = repo root
         );
@@ -92,9 +93,9 @@ abstract class ShellTestCase extends TestCase
      */
     protected function outputOf(string $raw): string
     {
-        // readline echoes the command on the first line; drop it
-        $lines = explode("\n", $raw);
-        array_shift($lines);
-        return implode("\n", $lines);
+        // In non-interactive mode (pipes), there's no command echo to strip.
+        // The output is exactly what the command produced.
+        // Strip nothing - the shell's non-interactive mode handles prompts correctly.
+        return $raw;
     }
 }

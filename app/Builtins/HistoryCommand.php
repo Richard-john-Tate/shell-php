@@ -20,6 +20,8 @@ class HistoryCommand implements BuiltinInterface
                         readline_add_history($line);
                     }
                 }
+                // Update append offset so history -a only appends new commands
+                $this->appendOffset = count(readline_list_history());
             }
             return;
         }
