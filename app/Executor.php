@@ -1,12 +1,31 @@
 <?php
+
+declare(strict_types=1);
+
 namespace App;
 
+/**
+ * Executes external commands via proc_open.
+ *
+ * Provides single-command execution (with streaming I/O) and multi-stage
+ * pipeline execution using true OS pipes for concurrency.
+ */
 class Executor
 {
+    // ── Single command execution ────────────────────────────────────────────
+
     /**
-     * Executes a single external command, passing streams directly to proc_open
-     * descriptors instead of buffering — this allows streaming commands like
-     * tail -f to work correctly.
+     * Executes a single external command, wiring streams directly to proc_open.
+     *
+     * Unlike buffered approaches, this passes file descriptors straight through,
+     * so streaming programs like `tail -f` work correctly.
+     *
+     * @param  string       $command Command name (resolved via findInPath)
+     * @param  string[]     $args    Arguments to pass to the process
+     * @param  resource|null $stdout  Override for stdout stream
+     * @param  resource|null $stderr  Override for stderr stream
+     * @param  resource|null $stdin   Override for stdin stream
+     * @return int Process exit code (127 if command not found)
      */
     public static function run(
         string $command,
@@ -42,10 +61,19 @@ class Executor
         return proc_close($process);
     }
 
+    // ── Pipeline execution ──────────────────────────────────────────────────
+
     /**
-     * Executes a pipeline of external commands, wiring stdout→stdin via OS pipes.
-     * Only the last segment's stdout/stderr can be redirected.
-     * Returns the exit code of the last command in the pipeline.
+     * Executes a pipeline of external commands with true concurrent OS pipes.
+     *
+     * Each command's stdout is wired to the next command's stdin via OS-level
+     * pipes. Only the last segment's stdout/stderr may be redirected.
+     * Processes are reaped in reverse order so SIGPIPE propagates correctly.
+     *
+     * @param  array<int, array{0:string, 1:string[]}> $segments Each entry is [command, args[]]
+     * @param  resource|null $stdout Redirect target for the last stage's stdout
+     * @param  resource|null $stderr Redirect target for the last stage's stderr
+     * @return int Exit code of the last command in the pipeline (127 on not-found)
      */
     public static function runPipeline(array $segments, $stdout = null, $stderr = null): int
     {
@@ -104,9 +132,16 @@ class Executor
         return $lastExitCode;
     }
 
+    // ── PATH resolution ─────────────────────────────────────────────────────
+
     /**
-     * Finds the full path of a command in the system's PATH.
-     * Results are cached for the lifetime of the process.
+     * Resolves a command name to its full path using the system PATH.
+     *
+     * Results are cached for the lifetime of the process so repeated
+     * invocations of the same command do not re-scan the filesystem.
+     *
+     * @param  string $command Bare command name to look up
+     * @return string|null Absolute path, or null if the command was not found
      */
     public static function findInPath(string $command): ?string
     {

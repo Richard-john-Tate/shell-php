@@ -1,6 +1,19 @@
 <?php
+
+declare(strict_types=1);
+
 namespace App\Builtins;
 
+/**
+ * Builtin `cd` — changes the current working directory.
+ *
+ * Supports:
+ *  - `cd` or `cd ~`  → $HOME
+ *  - `cd ~/path`      → $HOME/path
+ *  - `cd -`           → previous directory ($OLDPWD), printed to stdout
+ *
+ * Updates both $PWD and $OLDPWD environment variables.
+ */
 class CdCommand implements BuiltinInterface
 {
     public function execute(array $args, $stdout = null, $stderr = null): int

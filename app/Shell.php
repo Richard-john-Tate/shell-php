@@ -1,18 +1,35 @@
 <?php
+
+declare(strict_types=1);
+
 namespace App;
 
+use App\Builtins\BuiltinInterface;
+use App\Builtins\CdCommand;
 use App\Builtins\EchoCommand;
 use App\Builtins\ExitCommand;
-use App\Builtins\TypeCommand;
-use App\Builtins\PwdCommand;
-use App\Builtins\CdCommand;
 use App\Builtins\HistoryCommand;
+use App\Builtins\PwdCommand;
+use App\Builtins\TypeCommand;
 
+/**
+ * Interactive POSIX-ish shell built in PHP.
+ *
+ * Manages the REPL loop, builtin registration, prompt generation,
+ * variable expansion, tab completion, and pipeline orchestration.
+ */
 class Shell
 {
+    /** @var array<string, BuiltinInterface> Registered builtin commands */
     private array $builtins     = [];
+
+    /** @var int Exit code of the most recently executed command */
     private int   $lastExitCode = 0;
 
+    /**
+     * Registers builtins, seeds environment variables, and loads
+     * readline history from HISTFILE when set.
+     */
     public function __construct()
     {
         $this->builtins = [
@@ -55,6 +72,11 @@ class Shell
 
     // ── Prompt ───────────────────────────────────────────────────────────────
 
+    /**
+     * Builds a dynamic prompt string: user@hostname:~/cwd$
+     *
+     * The current working directory is collapsed to ~ when under $HOME.
+     */
     private function getPrompt(): string
     {
         $user = getenv('USER') ?: getenv('LOGNAME') ?: 'user';
@@ -71,6 +93,12 @@ class Shell
 
     // ── Variable expansion ───────────────────────────────────────────────────
 
+    /**
+     * Resolves a variable name to its value.
+     *
+     * Supports special variables $?, $$, $# and regular environment
+     * variables via getenv(). Returns an empty string for unset vars.
+     */
     private function expand(string $name): string
     {
         if ($name === '?') return (string)$this->lastExitCode;
@@ -82,8 +110,16 @@ class Shell
 
     // ── REPL ─────────────────────────────────────────────────────────────────
 
+    /**
+     * Runs the read-eval-print loop.
+     *
+     * Handles interactive (readline) and non-interactive (piped stdin)
+     * modes, dispatches single commands and multi-stage pipelines,
+     * and tracks the last exit code for $? expansion.
+     */
     public function run(): void
     {
+        // ── Tab completion ────────────────────────────────────────────────────
         readline_completion_function(function (string $input, int $index): array {
             readline_info('attempted_completion_over', 1);
 
@@ -203,9 +239,17 @@ class Shell
     // ── Pipeline execution ───────────────────────────────────────────────────
 
     /**
-     * All-external pipelines are delegated to Executor::runPipeline() (true concurrent
-     * OS pipes, supports tail -f and other streaming commands).
-     * Any pipeline containing a builtin runs sequentially with php://temp buffers.
+     * Executes a parsed multi-stage pipeline.
+     *
+     * Strategy:
+     *  - All-external pipelines → Executor::runPipeline() (true concurrent OS pipes)
+     *  - Any builtin present     → sequential execution with php://temp buffers
+     *
+     * @param  array         $parsed      Array of parsed segments from Parser::parse()
+     * @param  resource|null $finalStdout Redirect target for the last stage's stdout
+     * @param  resource|null $finalStderr Redirect target for the last stage's stderr
+     * @param  resource|null $firstStdin  Redirect source for the first stage's stdin
+     * @return int Exit code of the last stage
      */
     private function executePipeline(array $parsed, $finalStdout, $finalStderr, $firstStdin = null): int
     {
@@ -268,8 +312,14 @@ class Shell
         return $exitCode;
     }
 
-    // ── Dispatch ─────────────────────────────────────────────────────────────
+    // ── Single-command dispatch ──────────────────────────────────────────────
 
+    /**
+     * Dispatches a single (non-piped) command to the matching builtin
+     * or falls back to external execution via Executor::run().
+     *
+     * @return int Exit code of the executed command
+     */
     private function dispatch(string $command, array $args, $stdout = null, $stderr = null, $stdin = null): int
     {
         if (isset($this->builtins[$command])) {

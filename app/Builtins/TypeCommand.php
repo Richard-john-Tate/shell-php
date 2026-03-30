@@ -1,8 +1,17 @@
 <?php
+
+declare(strict_types=1);
+
 namespace App\Builtins;
 
 use App\Executor;
 
+/**
+ * Builtin `type` — identifies each argument as a shell builtin,
+ * an external executable (with its full path), or not found.
+ *
+ * Returns exit code 1 if any argument was not found, 0 otherwise.
+ */
 class TypeCommand implements BuiltinInterface
 {
     private array $builtins;

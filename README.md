@@ -1,6 +1,15 @@
 # shell-php
 
+![PHP 8.5](https://img.shields.io/badge/PHP-8.5-8892BF?logo=php&logoColor=white)
+![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)
+
 A POSIX-ish shell interpreter built in PHP 8.5, originally developed as a [CodeCrafters](https://codecrafters.io) challenge and extended into a portfolio showcase.
+
+<!-- Uncomment once you have a demo recording:
+![shell-php demo](docs/demo.gif)
+-->
+
+---
 
 ## Features
 
@@ -101,3 +110,7 @@ app/
 ```
 
 Pipeline execution uses two strategies: all-external pipelines are wired via OS pipes for true concurrency (supports `tail -f`); any pipeline containing a builtin runs sequentially with `php://temp` buffers between stages.
+
+## License
+
+This project is released under the [MIT License](LICENSE).

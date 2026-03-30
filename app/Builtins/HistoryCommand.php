@@ -1,15 +1,30 @@
 <?php
+
+declare(strict_types=1);
+
 namespace App\Builtins;
 
+/**
+ * Builtin `history` — manages the readline history list.
+ *
+ * Modes:
+ *  - `history`         List all entries
+ *  - `history N`       Show the last N entries
+ *  - `history -r file` Read history from file
+ *  - `history -w file` Write full history to file
+ *  - `history -a file` Append only new (session) entries to file
+ */
 class HistoryCommand implements BuiltinInterface
 {
     private int $appendOffset = 0;
 
+    /** Sets the append offset (number of pre-existing history entries). */
     public function setAppendOffset(int $offset): void
     {
         $this->appendOffset = $offset;
     }
 
+    /** Returns the current append offset for incremental writes. */
     public function getAppendOffset(): int
     {
         return $this->appendOffset;

@@ -1,10 +1,25 @@
 <?php
+
+declare(strict_types=1);
+
 namespace App;
 
+/**
+ * Shell input parser: pipeline splitting, tokenisation with quote handling,
+ * variable expansion, and redirection extraction.
+ */
 class Parser
 {
+    // ── Pipeline splitting ──────────────────────────────────────────────────
+
     /**
-     * Splits a raw input line on unquoted | characters and returns the segments.
+     * Splits a raw input line on unquoted pipe characters.
+     *
+     * Respects single quotes, double quotes, and backslash escaping
+     * so that `|` inside quoted strings is treated as a literal.
+     *
+     * @param  string $input Raw command line
+     * @return string[] Non-empty trimmed segments
      */
     public static function splitPipeline(string $input): array
     {
@@ -51,13 +66,21 @@ class Parser
         return array_values(array_filter($segments, fn($s) => $s !== ''));
     }
 
+    // ── Tokenisation & redirection extraction ───────────────────────────────
+
     /**
      * Tokenises a single pipeline segment and extracts redirections.
      *
-     * @param string        $input   Raw command string (no unquoted |).
-     * @param callable|null $expand  fn(string $name): string — invoked for $VAR / ${VAR} / $? / $$.
-     *                               Not called inside single quotes. Never called when null.
-     * @return array [$command, $args, $stdoutFile, $stderrFile, $stdoutMode, $stderrMode, $stdinFile]
+     * Handles single quotes (literal), double quotes (with expansion and
+     * limited escaping), backslash escaping outside quotes, $variable
+     * expansion (when $expand is provided), and redirection operators
+     * (>, >>, 2>, 2>>, <) — including no-space forms like `echo hello>file`.
+     *
+     * @param  string        $input   Raw command string (no unquoted |)
+     * @param  callable|null $expand  fn(string $name): string — invoked for $VAR / ${VAR} / $? / $$
+     *                                 Not called inside single quotes. Null disables expansion.
+     * @return array{0:string|null, 1:string[], 2:string|null, 3:string|null, 4:string, 5:string, 6:string|null}
+     *     [$command, $args, $stdoutFile, $stderrFile, $stdoutMode, $stderrMode, $stdinFile]
      */
     public static function parse(string $input, ?callable $expand = null): array
     {
@@ -206,9 +229,20 @@ class Parser
         return [$command, $filteredArgs, $stdoutFile, $stderrFile, $stdoutMode, $stderrMode, $stdinFile];
     }
 
+    // ── Variable expansion helpers ──────────────────────────────────────────
+
     /**
-     * Called after consuming the leading '$'. Reads the variable name/specifier,
-     * invokes $expand, and returns the substituted string. Advances $i past the token.
+     * Consumes a variable reference after the leading '$'.
+     *
+     * Supports braced forms (${VAR}), single-character special variables
+     * ($?, $$, $#, $!, $@, $*), and named variables ([a-zA-Z_][a-zA-Z0-9_]*).
+     * A bare '$' not followed by a recognised pattern is kept literal.
+     *
+     * @param  string   $input  Full input string
+     * @param  int      $i      Current position (just past '$'); advanced on return
+     * @param  int      $len    Length of $input
+     * @param  callable $expand fn(string $name): string
+     * @return string The expanded value, or literal '$' if nothing matched
      */
     private static function consumeVar(string $input, int &$i, int $len, callable $expand): string
     {

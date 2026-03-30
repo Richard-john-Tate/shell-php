@@ -1,6 +1,15 @@
 <?php
+
+declare(strict_types=1);
+
 namespace App\Builtins;
 
+/**
+ * Builtin `echo` — prints arguments to stdout.
+ *
+ * Supports `-n` (suppress trailing newline) and `-e` (interpret escape
+ * sequences like \n, \t, \\) in any combination (e.g. `-ne`, `-en`).
+ */
 class EchoCommand implements BuiltinInterface
 {
     public function execute(array $args, $stdout = null, $stderr = null): int
