@@ -76,8 +76,10 @@ abstract class ShellTestCase extends TestCase
             if ($chunk !== false && $chunk !== '') {
                 $buffer .= $chunk;
                 if (str_ends_with($buffer, '$ ')) {
-                    // Strip the trailing prompt
-                    return substr($buffer, 0, -2);
+                    // Strip the trailing prompt (including its "user@host:cwd" prefix)
+                    $stripped = substr($buffer, 0, -2); // remove "$ "
+                    $nlPos    = strrpos($stripped, "\n");
+                    return $nlPos !== false ? substr($stripped, 0, $nlPos + 1) : '';
                 }
             } else {
                 usleep(10_000); // 10 ms

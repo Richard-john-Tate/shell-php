@@ -4,54 +4,54 @@ namespace App;
 class Executor
 {
     /**
-     * Executes a command with the given arguments.
-     *
-     * @param string $command
-     * @param array $args
-     * @return void
+     * Executes a single external command, passing streams directly to proc_open
+     * descriptors instead of buffering — this allows streaming commands like
+     * tail -f to work correctly.
      */
-    public static function run(string $command, array $args, $stdout = null, $stderr = null): void
-    {
+    public static function run(
+        string $command,
+        array  $args,
+               $stdout = null,
+               $stderr = null,
+               $stdin  = null
+    ): int {
         $fullPath = self::findInPath($command);
 
         if ($fullPath === null) {
-            fwrite(STDERR, "$command: command not found\n");
-            return;
+            fwrite($stderr ?? STDERR, "$command: command not found\n");
+            return 127;
         }
-        // argv[0] should be the bare command name, not the full path,
-        // as that's what the program receives as its own name (argv[0])
+
+        // argv[0] is the bare command name, matching standard shell convention
         $cmd = array_merge([$command], $args);
+
         $descriptors = [
-            0 => ["pipe", "r"],
-            1 => ["pipe", "w"],
-            2 => ["pipe", "w"],
+            0 => $stdin  ?? ['file', 'php://stdin',  'r'],
+            1 => $stdout ?? ['file', 'php://stdout', 'w'],
+            2 => $stderr ?? ['file', 'php://stderr', 'w'],
         ];
 
+        $pipes   = [];
         $process = proc_open($cmd, $descriptors, $pipes);
 
-        if (is_resource($process)) {
-            fclose($pipes[0]);
-            fwrite($stdout ?? STDOUT, stream_get_contents($pipes[1]));
-            fwrite($stderr ?? STDERR, stream_get_contents($pipes[2]));
-            fclose($pipes[1]);
-            fclose($pipes[2]);
-            proc_close($process);
+        if (!is_resource($process)) {
+            fwrite($stderr ?? STDERR, "$command: failed to start\n");
+            return 1;
         }
+
+        return proc_close($process);
     }
 
     /**
-     * Executes a pipeline of external commands, connecting stdout→stdin via pipes.
-     * Only the last command's stdout/stderr can be redirected.
-     *
-     * @param array $segments  Each element is [command, args[]]
-     * @param resource|null $stdout
-     * @param resource|null $stderr
+     * Executes a pipeline of external commands, wiring stdout→stdin via OS pipes.
+     * Only the last segment's stdout/stderr can be redirected.
+     * Returns the exit code of the last command in the pipeline.
      */
-    public static function runPipeline(array $segments, $stdout = null, $stderr = null): void
+    public static function runPipeline(array $segments, $stdout = null, $stderr = null): int
     {
         $count       = count($segments);
         $processes   = [];
-        $prevReadEnd = null; // read end of the previous inter-process pipe
+        $prevReadEnd = null;
 
         for ($i = 0; $i < $count; $i++) {
             [$command, $args] = $segments[$i];
@@ -62,7 +62,7 @@ class Executor
                 fwrite(STDERR, "$command: command not found\n");
                 if ($prevReadEnd) fclose($prevReadEnd);
                 foreach (array_reverse($processes) as $p) proc_close($p);
-                return;
+                return 127;
             }
 
             $desc = [
@@ -74,13 +74,12 @@ class Executor
             $pipes   = [];
             $process = proc_open(array_merge([$command], $args), $desc, $pipes);
 
-            // Close the read end in the parent now that the child has it
+            // Close the read end in the parent now that the child has inherited it
             if ($prevReadEnd) {
                 fclose($prevReadEnd);
                 $prevReadEnd = null;
             }
 
-            // The write end is the child's stdout; the read end ($pipes[1]) is ours
             if (!$isLast && isset($pipes[1])) {
                 $prevReadEnd = $pipes[1];
             }
@@ -90,21 +89,34 @@ class Executor
             }
         }
 
-        // Wait in reverse order: last command exits first, SIGPIPE propagates back
+        // Wait in reverse order: last process exits first, SIGPIPE propagates back.
+        // The first iteration (reversed) is the LAST process — capture its exit code.
+        $lastExitCode = 0;
+        $first        = true;
         foreach (array_reverse($processes) as $process) {
-            proc_close($process);
+            $code = proc_close($process);
+            if ($first) {
+                $lastExitCode = $code;
+                $first        = false;
+            }
         }
+
+        return $lastExitCode;
     }
 
     /**
      * Finds the full path of a command in the system's PATH.
-     *
-     * @param string $command
-     * @return string|null
+     * Results are cached for the lifetime of the process.
      */
     public static function findInPath(string $command): ?string
     {
-        $paths = explode(PATH_SEPARATOR, getenv('PATH'));
+        static $cache = [];
+
+        if (array_key_exists($command, $cache)) {
+            return $cache[$command];
+        }
+
+        $paths = explode(PATH_SEPARATOR, getenv('PATH') ?: '');
         foreach ($paths as $path) {
             $candidates = [
                 $path . DIRECTORY_SEPARATOR . $command,
@@ -112,10 +124,11 @@ class Executor
             ];
             foreach ($candidates as $candidate) {
                 if (is_file($candidate) && is_executable($candidate)) {
-                    return $candidate;
+                    return $cache[$command] = $candidate;
                 }
             }
         }
-        return null;
+
+        return $cache[$command] = null;
     }
 }

@@ -10,7 +10,12 @@ class HistoryCommand implements BuiltinInterface
         $this->appendOffset = $offset;
     }
 
-    public function execute(array $args, $stdout = null, $stderr = null): void
+    public function getAppendOffset(): int
+    {
+        return $this->appendOffset;
+    }
+
+    public function execute(array $args, $stdout = null, $stderr = null): int
     {
         if (($args[0] ?? null) === '-r') {
             $path = $args[1] ?? null;
@@ -20,10 +25,9 @@ class HistoryCommand implements BuiltinInterface
                         readline_add_history($line);
                     }
                 }
-                // Update append offset so history -a only appends new commands
                 $this->appendOffset = count(readline_list_history());
             }
-            return;
+            return 0;
         }
 
         if (($args[0] ?? null) === '-a') {
@@ -36,7 +40,7 @@ class HistoryCommand implements BuiltinInterface
                 }
                 $this->appendOffset = count($history);
             }
-            return;
+            return 0;
         }
 
         if (($args[0] ?? null) === '-w') {
@@ -45,7 +49,7 @@ class HistoryCommand implements BuiltinInterface
                 $content = implode("\n", readline_list_history()) . "\n";
                 file_put_contents($path, $content);
             }
-            return;
+            return 0;
         }
 
         $out     = $stdout ?? STDOUT;
@@ -58,5 +62,7 @@ class HistoryCommand implements BuiltinInterface
         for ($i = $start; $i < $total; $i++) {
             fprintf($out, "    %d  %s\n", $i + 1, $history[$i]);
         }
+
+        return 0;
     }
 }

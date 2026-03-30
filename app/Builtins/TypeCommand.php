@@ -12,23 +12,30 @@ class TypeCommand implements BuiltinInterface
         $this->builtins = $builtins;
     }
 
-    public function execute(array $args, $stdout = null, $stderr = null): void
+    public function execute(array $args, $stdout = null, $stderr = null): int
     {
-        $out = $stdout ?? STDOUT;
-        $command = $args[0] ?? null;
-        if ($command === null) return;
+        if (empty($args)) return 0;
 
-        if (isset($this->builtins[$command])) {
-            fwrite($out, "$command is a shell builtin\n");
-            return;
+        $out      = $stdout ?? STDOUT;
+        $err      = $stderr ?? STDERR;
+        $exitCode = 0;
+
+        foreach ($args as $command) {
+            if (isset($this->builtins[$command])) {
+                fwrite($out, "$command is a shell builtin\n");
+                continue;
+            }
+
+            $path = Executor::findInPath($command);
+            if ($path !== null) {
+                fwrite($out, "$command is $path\n");
+                continue;
+            }
+
+            fwrite($err, "$command: not found\n");
+            $exitCode = 1;
         }
 
-        $path = Executor::findInPath($command);
-        if ($path !== null) {
-            fwrite($out, "$command is $path\n");
-            return;
-        }
-
-        fwrite($out, "$command: not found\n");
+        return $exitCode;
     }
 }
