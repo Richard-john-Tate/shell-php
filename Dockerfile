@@ -1,3 +1,10 @@
+# Stage 1: install dependencies
+FROM composer:2 AS deps
+WORKDIR /app
+COPY composer.json composer.lock ./
+RUN composer install --no-interaction --optimize-autoloader
+
+# Stage 2: runtime image
 FROM php:8.5-cli
 
 # Non-root user to run the shell — cannot modify app source
@@ -8,11 +15,11 @@ RUN groupadd --gid 1001 shelluser \
 
 # Install app code as root (shelluser has read but not write access)
 WORKDIR /opt/shell
-COPY composer.json .
-COPY phpunit.xml* ./
-COPY vendor/ vendor/
+COPY composer.json composer.lock ./
+COPY --from=deps /app/vendor ./vendor/
 COPY app/ app/
 COPY tests/ tests/
+COPY phpunit.xml* ./
 
 RUN chown -R root:root /opt/shell \
  && chmod -R 755 /opt/shell
